@@ -4,7 +4,7 @@ import { TCPConnection } from "./tcp.connection";
 export type TCPListener = {
     socket:Server;
     listener? : null | {
-        resolve(socket:TCPConnection):void;
+        resolve():void;
         reject(error:Error):void;
     }
 }

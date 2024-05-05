@@ -1,24 +1,32 @@
 import * as net from "net";
 import { TCPConnection } from "./types/tcp.connection";
-import { assert } from "console";
+import { assert, log } from "console";
 import { TCPListener } from "./types/tcp.listener";
+import { DynamicBuffer } from "./types/dynamic.buffer";
+import { cutMessage, pushBuf } from "./utils/dynamic.buffer.utils";
 
-export function accept(listener:TCPListener):Promise<TCPConnection> {
-    
-    return new Promise <TCPConnection>((resolve,reject)=>{
-        listener.listener = {resolve,reject}
-        listener.socket.on('connection',(socket:net.Socket)=>{
-        console.log("accepted connection");
+export function accept(listener: TCPListener): Promise<void> {
 
-            resolve(initSocket(socket))
+    return new Promise<void>((resolve, reject) => {
+        listener.listener = { resolve, reject }
+        listener.socket.on('connection', (socket: net.Socket) => {
+            console.log("accepted connection from ", socket.remoteAddress);
+            try {
+                const tcpconn = initSocket(socket)
+                serveClient(tcpconn)
+                resolve()
+            } catch (exc) {
+                reject(exc)
+            }
+
         })
-        
+
     })
 }
 
-export function listen(listeningServer:net.Server): TCPListener {
-    const listener:TCPListener = {
-        socket:listeningServer
+export function listen(listeningServer: net.Server): TCPListener {
+    const listener: TCPListener = {
+        socket: listeningServer
     }
     return listener
 }
@@ -29,6 +37,8 @@ function initSocket(socket: net.Socket): TCPConnection {
     const connection: TCPConnection = {
         socket,
     }
+    console.log("inside inint socket");
+
     socket.on('data', (data: Buffer) => {
         connection.socket.pause()
         connection.reader!.resolve(data)
@@ -70,7 +80,7 @@ function writeData(data: Buffer, connection: TCPConnection): Promise<void> {
     assert(data.length >= 1)
     return new Promise<void>((resolve, reject) => {
 
-        connection.socket.write("echo .. " + data, (err) => {
+        connection.socket.write(data, (err) => {
             if (err)
                 reject(err)
 
@@ -80,14 +90,45 @@ function writeData(data: Buffer, connection: TCPConnection): Promise<void> {
 }
 
 export async function serveClient(conn: TCPConnection): Promise<void> {
+    console.log("inside serverClient");
+
+    const clientBuffer: DynamicBuffer = { data: Buffer.alloc(0), length: 0 }
     while (true) {
-        const data = await readData(conn);
-        if (data.length === 0) {
-            console.log('end connection');
-            break;
+        console.log("...");
+        
+        let msg = cutMessage(clientBuffer)
+        if (!msg) {
+
+            const data = await readData(conn);
+            console.log("{{data}}");
+            console.log(data.toString());
+
+
+            pushBuf(clientBuffer, data)
+            //     console.log(clientBuffer.data.toString());
+
+            if (data.length === 0) {
+                console.log('end connection');
+                break;
+            }
+            console.log('data', data);
+            continue;
         }
-        console.log('data', data);
-        await writeData(data, conn);
+        // msg = cutMessage(clientBuffer)
+        console.log("{{{{{{{{{{{{{{{{{{{{{{{{msg}}}}}}}}}}}}}}}}}}}}}}}}");
+        // console.log(msg);
+
+        if (msg.equals(Buffer.from("quit\n"))) {
+            
+            await writeData(Buffer.from("bye!"), conn)
+            conn.socket.destroy()
+            return
+        } else {
+            const reply = Buffer.concat([Buffer.from("echo..."), msg])
+            await writeData(reply, conn);
+        }
+
+        // await writeData(data, conn)
     }
 }
 

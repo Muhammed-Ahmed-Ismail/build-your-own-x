@@ -1,11 +1,11 @@
 import { DynamicBuffer } from "../types/dynamic.buffer";
 
 export function cutMessage(buffer:DynamicBuffer): Buffer | null{
-    const idx = buffer.data.indexOf("\n")
+    const idx = buffer.data.subarray(0,buffer.length).indexOf("\n")
     if(idx < 0)
         return null
 
-    let msg = Buffer.from(buffer.data,0,idx)
+    let msg = Buffer.from(buffer.data.subarray(0,idx+1))
     popBuf(buffer,idx+1)
     return msg
 }
@@ -23,8 +23,8 @@ export function pushBuf(messageBuffer:DynamicBuffer,data:Buffer){
         expandBuffer(messageBuffer,totLen)
     }
 
-    data.copy(messageBuffer.data,messageBuffer.data.length,0,data.length)
-
+    data.copy(messageBuffer.data,messageBuffer.length,0)
+    messageBuffer.length = totLen
 
 }
 
@@ -39,5 +39,5 @@ function expandBuffer(dyBuffer:DynamicBuffer , newSizeTo:number){
         dyBuffer.data.copy(newBuffer,0,0)
 
         dyBuffer.data = newBuffer
-        dyBuffer.length = newSizeTo
+        dyBuffer.length = dyBuffer.data.length
 }
