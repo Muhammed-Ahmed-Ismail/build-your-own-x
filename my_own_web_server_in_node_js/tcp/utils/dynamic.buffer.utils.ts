@@ -6,7 +6,12 @@ export function cutMessage(buffer:DynamicBuffer): Buffer | null{
         return null
 
     let msg = Buffer.from(buffer.data.subarray(0,idx+1))
+    console.log("before pop");
+    console.log(buffer.data.toString());
+    
     popBuf(buffer,idx+1)
+    console.log("after pop");
+    console.log(buffer.data.toString());
     return msg
 }
 
@@ -18,19 +23,22 @@ function popBuf(baffer:DynamicBuffer , len:number = 0) : void{
 
 export function pushBuf(messageBuffer:DynamicBuffer,data:Buffer){
     const totLen = messageBuffer.length + data.length;
-
+    console.log('totLen',totLen);
     if(totLen > messageBuffer.data.length){
         expandBuffer(messageBuffer,totLen)
     }
 
-    data.copy(messageBuffer.data,messageBuffer.length,0)
+    data.copy(messageBuffer.data,messageBuffer.length ,0)
     messageBuffer.length = totLen
+  
+    
+    
 
 }
 
 function expandBuffer(dyBuffer:DynamicBuffer , newSizeTo:number){
         let size = Math.max(dyBuffer.data.length,32);
-
+        // let oldSize = dyBuffer.length;
         while(size < newSizeTo)
             size *= 2;
 
@@ -38,6 +46,8 @@ function expandBuffer(dyBuffer:DynamicBuffer , newSizeTo:number){
 
         dyBuffer.data.copy(newBuffer,0,0)
 
+       
+        
         dyBuffer.data = newBuffer
-        dyBuffer.length = dyBuffer.data.length
+        // dyBuffer.length = oldSize
 }

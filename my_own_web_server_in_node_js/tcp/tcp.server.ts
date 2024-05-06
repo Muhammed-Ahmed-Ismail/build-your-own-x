@@ -94,29 +94,31 @@ export async function serveClient(conn: TCPConnection): Promise<void> {
 
     const clientBuffer: DynamicBuffer = { data: Buffer.alloc(0), length: 0 }
     while (true) {
-        console.log("...");
         
         let msg = cutMessage(clientBuffer)
+        
         if (!msg) {
 
             const data = await readData(conn);
-            console.log("{{data}}");
-            console.log(data.toString());
+          
 
 
             pushBuf(clientBuffer, data)
             //     console.log(clientBuffer.data.toString());
 
+           
+            
+
             if (data.length === 0) {
                 console.log('end connection');
                 break;
             }
-            console.log('data', data);
-            continue;
+            continue
         }
         // msg = cutMessage(clientBuffer)
-        console.log("{{{{{{{{{{{{{{{{{{{{{{{{msg}}}}}}}}}}}}}}}}}}}}}}}}");
-        // console.log(msg);
+        
+        if(!msg)
+            continue
 
         if (msg.equals(Buffer.from("quit\n"))) {
             
