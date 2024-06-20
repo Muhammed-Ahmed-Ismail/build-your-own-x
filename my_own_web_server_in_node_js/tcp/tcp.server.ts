@@ -4,19 +4,27 @@ import { assert, log } from "console";
 import { TCPListener } from "./types/tcp.listener";
 import { DynamicBuffer } from "./types/dynamic.buffer";
 import { cutMessage, pushBuf } from "./utils/dynamic.buffer.utils";
+import { buffer } from "stream/consumers";
+import HttpError from "./errors/http.error";
+import { handleRequest, readBody, writeHTTPResp } from "./utils/http.utils";
+import { statusCode } from "./utils/status.code.enum";
 
-export function accept(listener: TCPListener): Promise<void> {
+export async function accept(listener: TCPListener): Promise<void> {
 
     return new Promise<void>((resolve, reject) => {
         listener.listener = { resolve, reject }
-        listener.socket.on('connection', (socket: net.Socket) => {
+        listener.socket.on('connection', async (socket: net.Socket) => {
             console.log("accepted connection from ", socket.remoteAddress);
             try {
                 const tcpconn = initSocket(socket)
-                serveClient(tcpconn)
+                await serveClient(tcpconn)
+
                 resolve()
             } catch (exc) {
                 reject(exc)
+            } finally {
+
+                socket.destroy();
             }
 
         })
@@ -53,6 +61,8 @@ function initSocket(socket: net.Socket): TCPConnection {
         }
     })
     socket.on('end', () => {
+        console.log("connection ended");
+
         connection.ended = true;
         if (connection.reader) {
             connection.reader.resolve(Buffer.from(''));
@@ -72,19 +82,29 @@ function readData(connection: TCPConnection): Promise<Buffer> {
         if (connection.err)
             reject(connection.err);
 
+        if (connection.ended) {
+            resolve(Buffer.from(''));
+            // EOF
+            return;
+        }
+
         connection.socket.resume()
     })
 }
 
-function writeData(data: Buffer, connection: TCPConnection): Promise<void> {
+export function writeData(data: Buffer, connection: TCPConnection): Promise<void> {
     assert(data.length >= 1)
     return new Promise<void>((resolve, reject) => {
 
         connection.socket.write(data, (err) => {
             if (err)
                 reject(err)
+            else {
+                console.log("inside write data", data.toString());
 
-            resolve()
+                resolve();
+            }
+
         })
     })
 }
@@ -94,43 +114,44 @@ export async function serveClient(conn: TCPConnection): Promise<void> {
 
     const clientBuffer: DynamicBuffer = { data: Buffer.alloc(0), length: 0 }
     while (true) {
-        
-        let msg = cutMessage(clientBuffer)
-        
+
+        let msg: null | HTTPReq = cutMessage(clientBuffer)
+
         if (!msg) {
 
             const data = await readData(conn);
-          
+
 
 
             pushBuf(clientBuffer, data)
-            //     console.log(clientBuffer.data.toString());
 
-           
-            
-
-            if (data.length === 0) {
-                console.log('end connection');
-                break;
+            if (data.length === 0 && buffer.length === 0) {
+                return; // no more requests
             }
-            continue
-        }
-        // msg = cutMessage(clientBuffer)
-        
-        if(!msg)
-            continue
-
-        if (msg.equals(Buffer.from("quit\n"))) {
-            
-            await writeData(Buffer.from("bye!"), conn)
-            conn.socket.destroy()
-            return
-        } else {
-            const reply = Buffer.concat([Buffer.from("echo..."), msg])
-            await writeData(reply, conn);
+            if (data.length === 0) {
+                throw new HttpError('Unexpected EOF.', statusCode.BAD_REQUEST);
+            }
+            // got some data, try it again.
+            continue;
         }
 
-        // await writeData(data, conn)
+        const reqBody: BodyReader = readBody(msg, conn, clientBuffer)
+
+        const res: HTTPRes = await handleRequest(msg, reqBody)
+
+
+        await writeHTTPResp(conn, res);
+        // close the connection for HTTP/1.0
+        if (msg.version === '1.0') {
+            return;
+        }
+
+
+        // make sure that the request body is consumed completely
+        while ((await reqBody.read()).length > 0) {}
+
+        return
+
     }
 }
 
@@ -148,5 +169,6 @@ server.on("close", () => {
 })
 
 export {
-    server
+    server,
+    readData
 }

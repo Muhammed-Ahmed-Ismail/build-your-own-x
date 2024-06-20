@@ -1,21 +1,20 @@
 import { DynamicBuffer } from "../types/dynamic.buffer";
+import { parseHttpHeader } from "./http.utils";
 
-export function cutMessage(buffer:DynamicBuffer): Buffer | null{
-    const idx = buffer.data.subarray(0,buffer.length).indexOf("\n")
+export function cutMessage(buffer:DynamicBuffer): HTTPReq | null{
+    const idx = buffer.data.subarray(0,buffer.length).indexOf('\r\n\r\n')
     if(idx < 0)
         return null
 
-    let msg = Buffer.from(buffer.data.subarray(0,idx+1))
-    console.log("before pop");
-    console.log(buffer.data.toString());
+    let msg = parseHttpHeader(buffer.data)
     
-    popBuf(buffer,idx+1)
-    console.log("after pop");
-    console.log(buffer.data.toString());
+    
+    popBuf(buffer,idx+4)
+    
     return msg
 }
 
-function popBuf(baffer:DynamicBuffer , len:number = 0) : void{
+export function popBuf(baffer:DynamicBuffer , len:number = 0) : void{
     baffer.data.copyWithin(0,len,baffer.length)
     baffer.length -= len
 }
@@ -23,7 +22,6 @@ function popBuf(baffer:DynamicBuffer , len:number = 0) : void{
 
 export function pushBuf(messageBuffer:DynamicBuffer,data:Buffer){
     const totLen = messageBuffer.length + data.length;
-    console.log('totLen',totLen);
     if(totLen > messageBuffer.data.length){
         expandBuffer(messageBuffer,totLen)
     }
